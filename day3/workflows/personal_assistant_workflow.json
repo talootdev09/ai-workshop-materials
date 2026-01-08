@@ -1,0 +1,221 @@
+{
+  "name": "Personal Assistant - Meeting & Email Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "personal-assistant",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        320
+      ],
+      "webhookId": "personal-assistant-webhook",
+      "id": "c58891b8-91e1-4904-8b0a-dfba5d2a4dea",
+      "notes": "Receives structured data from agent: action (book_meeting or send_email) and data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.body.action }}",
+              "rightValue": "book_meeting",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "IF - Check Action",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        208,
+        320
+      ],
+      "id": "b4ef616d-2669-4074-a5b1-40ec510831e0",
+      "notes": "Routes to Calendar branch if book_meeting, else to Email branch"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "taloot.khan@invozone.dev",
+          "mode": "list",
+          "cachedResultName": "taloot.khan@invozone.dev"
+        },
+        "start": "={{ $json.start_time_iso }}",
+        "end": "={{ $json.end_time_iso }}",
+        "additionalFields": {
+          "attendees": [
+            "={{ $('IF - Check Action').item.json.body.attendee_email }}"
+          ],
+          "description": "={{ $('IF - Check Action').item.json.body.topic }}"
+        }
+      },
+      "name": "Google Calendar - Create Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        464,
+        208
+      ],
+      "id": "e0401bf8-adc8-4452-8c5a-6e7215be1ac6",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "auPi7ICK8p3gb06B",
+          "name": "Google Calendar account"
+        }
+      },
+      "notes": "Creates calendar event. Configure Google Calendar OAuth2 credential in n8n."
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.body.recipient_email }}",
+        "subject": "={{ $json.body.subject }}",
+        "message": "={{ $json.body.message }}",
+        "options": {}
+      },
+      "name": "Gmail - Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        416,
+        416
+      ],
+      "id": "d25677e7-ec4a-461e-8f28-a0d96ef6a32d",
+      "webhookId": "186988c0-5e9b-4f8a-a162-4b6bc4823896",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1eMaWqeiBxVXIuXF",
+          "name": "Gmail account"
+        }
+      },
+      "notes": "Sends email when action is send_email. Configure Gmail OAuth2 credential in n8n."
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nif (input.id && input.htmlLink) {\n  // Calendar event response\n  return {\n    json: {\n      status: \"success\",\n      action: \"book_meeting\",\n      event_id: input.id,\n      event_link: input.htmlLink,\n      message: `Meeting '${input.summary}' scheduled successfully. Calendar invite sent to ${input.attendees?.[0]?.email || \"attendee\"}.`,\n    },\n  };\n} else if (input.id || input.threadId) {\n  // Email response\n  return {\n    json: {\n      status: \"success\",\n      action: \"send_email\",\n      thread_id: input.threadId,\n      message: `Email sent successfully.`,\n    },\n  };\n} else {\n  // Default response\n  return {\n    json: {\n      status: \"error\",\n      message: \"Invalid input.\",\n    },\n  };\n}\n"
+      },
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        320
+      ],
+      "id": "e7df322a-ec7b-4a6e-80c5-cc44fc073d5e",
+      "notes": "Formats the response to return to agent"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1056,
+        320
+      ],
+      "id": "493aba23-703e-4810-9a9f-350370df14c3",
+      "notes": "Returns result to agent"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "IF - Check Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Check Action": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar - Create Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail - Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Create Event": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Send Email": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "89425b73-a82f-412b-beef-ca64b62c6c65",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "079c797cef22826b49eb3eb5b0d51c974207d380a6e169d07074b27580b23158"
+  },
+  "id": "VelaNBJGgtFrucPr",
+  "tags": []
+}
